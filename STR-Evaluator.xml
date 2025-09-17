@@ -1,0 +1,118 @@
+<tool id="str_evaluator" name="STR Evaluator" version="1.0.0">
+    <description>Processes STR-Finder pickle + PE/DCS BAMs; outputs summary PKLs and per-region PDFs</description>
+
+    <!-- Use your exact Python; add/remove deps as needed -->
+    <requirements>
+        <requirement type="package">python</requirement>
+        <requirement type="package">pysam</requirement>
+        <requirement type="package">pandas</requirement>
+        <requirement type="package">numpy</requirement>
+        <requirement type="package">matplotlib</requirement>
+        <requirement type="package">tqdm</requirement>
+        <requirement type="package">openpyxl</requirement>
+        <!-- If your helpers need others, add them here -->
+    </requirements>
+
+    <stdio>
+        <exit_code range="1:" level="fatal"/>
+    </stdio>
+
+    <version_command>
+        echo "script version 1.0.0"
+    </version_command>
+
+    <command detect_errors="exit_code">
+        <![CDATA[
+        python3 $__tool_directory__/main.py
+            --str_finder_pkl '$str_pkl'
+            --dcsbam '$dcs_bam'
+            --pebam '$pe_bam'
+            --regions '$regions'
+            #if str($cross_table) != ''
+                --crosstable '$cross_table'
+                --strain1 '$strain1'
+                --strain2 '$strain2'
+            #end if
+            --minseqlength $min_seq_len
+        ]]>
+    </command>
+
+    <inputs>
+        <!-- STR-Finder pickle as opaque binary -->
+        <param name="str_pkl" type="data" format="binary" label="STR-Finder pickle (.pkl)"/>
+
+        <!-- BAMs -->
+        <param name="dcs_bam" type="data" format="bam" label="DCS BAM"/>
+        <param name="pe_bam"  type="data" format="bam" label="PE BAM"/>
+        <!-- (If you want to allow BAM indexes as optional inputs, add them or rely on Galaxy auto-indexing.) -->
+
+        <!-- Regions (comma-separated) -->
+        <param name="regions" type="text" label="Regions (comma-separated chromosomes)"
+               help="Example: chr1,chr2,chr3 ; must match BAM reference names."/>
+
+        <!-- Optional cross-table + strains -->
+        <param name="cross_table" type="data" format="xlsx,xls" optional="true"
+               label="Cross-table Excel (optional)"
+               help="If provided, also fill Strain 1 and Strain 2 below."/>
+
+        <param name="strain1" type="text" optional="true" label="Strain 1 (optional; requires Cross-table)"/>
+        <param name="strain2" type="text" optional="true" label="Strain 2 (optional; requires Cross-table)"/>
+
+        <!-- Other options -->
+        <param name="min_seq_len" type="integer" value="60" label="Minimum sequence length"/>
+    </inputs>
+
+    <outputs>
+        <!-- 1) Per-region plot PDFs inside results/StutterVsTierPlots/<region>/*.pdf -->
+        <collection name="stutter_tier_pdfs" type="list" label="Stutter vs FS/Tier PDFs">
+            <discover_datasets pattern="results/StutterVsTierPlots/*/*.pdf" format="pdf"/>
+        </collection>
+
+        <!-- 2) If your script writes merged PDFs per region, also collect those.
+               Your code names: results/StutterVsTierPlots/<region>_library_<region>_StutterVsFS_Tiers[.pdf]
+               We'll capture with a broad pattern; adjust if you change filenames. -->
+        <collection name="merged_region_pdfs" type="list" label="Merged PDFs per region">
+            <discover_datasets pattern="results/StutterVsTierPlots/*_StutterVsFS_Tiers*" format="pdf"/>
+        </collection>
+
+        <!-- 3) Pickle artifacts written to results/ (e.g., _favor_STRs_dfRaw.pkl, _STRSummaryCash.pkl, etc.) -->
+        <collection name="result_pickles" type="list" label="Result pickles (binary)">
+            <discover_datasets pattern="results/*.pkl" format="binary"/>
+        </collection>
+    </outputs>
+
+    <help><![CDATA[
+**What this tool does**
+
+Runs your `main.py` pipeline:
+- Loads STR-Finder pickle (binary, trusted) and PE/DCS BAMs
+- Computes STR/tier summaries
+- Writes intermediate/final PKLs to `results/`
+- Renders per-region stutter vs FS/Tier plots to `results/StutterVsTierPlots/<region>/...pdf`
+- (If your script merges per-region PDFs) Also writes merged PDFs named like:
+  `results/StutterVsTierPlots/<region>_library_<region>_StutterVsFS_Tiers(.pdf)`
+
+**Inputs**
+- **STR-Finder pickle (.pkl)**: passed as binary (opaque) to your script
+- **DCS BAM**, **PE BAM**
+- **Regions**: comma-separated chromosome names matching BAM headers
+- **Cross-table Excel (optional)** + **Strain 1/2** (must be provided together)
+- **Minimum sequence length** (default 60)
+
+**Outputs**
+- **Stutter/Tier PDFs**: discovered from `results/StutterVsTierPlots/*/*.pdf` (collection)
+- **Merged PDFs per region** (if produced): discovered from `results/StutterVsTierPlots/*_StutterVsFS_Tiers*`
+- **Binary pickles**: discovered from `results/*.pkl` (collection)
+
+**Notes**
+- The tool expects your helper modules `HelpFunctions/STR_Functions.py` and `HelpFunctions/TierFunctions.py`
+  to be placed within the tool directory (e.g., `tools/str_calling_stutter_plots/HelpFunctions/...`)
+  so `import` works at runtime.
+- Do **not** write to `~` paths; the script already uses `results/...` relative to the job working directory.
+- If you modify filenames or folder layout, adjust the `<discover_datasets pattern="...">` globs accordingly.
+    ]]></help>
+
+    <citations>
+        <!-- (Optional) add references -->
+    </citations>
+</tool>
